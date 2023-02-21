@@ -13,12 +13,12 @@ import (
 )
 
 func GetPackagePath(dir string) (string, error) {
-	if !path.IsAbs(dir) {
+	if !filepath.IsAbs(dir) {
 		pwd, err := os.Getwd()
 		if err != nil {
 			return "", err
 		}
-		dir = path.Join(pwd, dir)
+		dir = filepath.Join(pwd, dir)
 	}
 	gomod, err := getGoModPath(dir)
 	if err != nil {
@@ -43,7 +43,7 @@ func getPackagePathFromGOPATH(dir string) (string, error) {
 		gopath = build.Default.GOPATH
 	}
 	for _, p := range strings.Split(gopath, string(filepath.ListSeparator)) {
-		basepath := path.Join(p, "src") + string(filepath.Separator)
+		basepath := filepath.Join(p, "src") + string(filepath.Separator)
 		rel, err := filepath.Rel(basepath, dir)
 		if err == nil && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return path.Clean(filepath.ToSlash(rel)), nil
@@ -61,7 +61,7 @@ func getPackagePathFromGoMod(dir string, gomod string) (string, error) {
 		path.Join(
 			module,
 			filepath.ToSlash(
-				strings.TrimPrefix(dir, path.Dir(gomod)),
+				strings.TrimPrefix(dir, filepath.Dir(gomod)),
 			),
 		),
 	), nil
