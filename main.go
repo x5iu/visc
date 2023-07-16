@@ -111,10 +111,11 @@ func (g *Generator) preload() {
 
 func (g *Generator) genGetterSetter(t *inspect.Type) {
 	var (
-		all       bool
-		allPrefix string
-		allGetter bool
-		allSetter bool
+		all          bool
+		allGetPrefix string
+		allSetPrefix string
+		allGetter    bool
+		allSetter    bool
 	)
 	var (
 		construct       bool
@@ -131,7 +132,8 @@ func (g *Generator) genGetterSetter(t *inspect.Type) {
 		}
 		drtAll := getDirective(list, "all")
 		if all = drtAll != ""; all {
-			allPrefix, _ = drtAll.Lookup("prefix")
+			allGetPrefix, _ = drtAll.Lookup("getPrefix")
+			allSetPrefix, _ = drtAll.Lookup("setPrefix")
 			allGetterOpt, found := drtAll.Lookup("getter")
 			if b, err := strconv.ParseBool(allGetterOpt); found && err == nil {
 				allGetter = b
@@ -165,10 +167,10 @@ func (g *Generator) genGetterSetter(t *inspect.Type) {
 				tag,
 			)
 			if getterTag := tag.Get("getter"); getterTag != "-" && all && allGetter && !hasGetter {
-				getter, hasGetter, isRef = allPrefix+toCamel(name.String()), true, false
+				getter, hasGetter, isRef = allGetPrefix+toCamel(name.String()), true, false
 			}
 			if setterTag := tag.Get("setter"); setterTag != "-" && all && allSetter && !hasSetter {
-				setter, hasSetter = "Set"+toCamel(name.String()), true
+				setter, hasSetter = allSetPrefix+toCamel(name.String()), true
 			}
 			var typ string
 			if hasGetter || hasSetter {
