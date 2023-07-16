@@ -7,7 +7,7 @@ import (
 	"github.com/x5iu/visc/inspect"
 	"go/ast"
 	"go/format"
-	"go/token"
+	"go/types"
 	"io"
 	"log"
 	"os"
@@ -59,14 +59,18 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	g := &Generator{
+		Package:    pkg,
+		Tag:        *buildTags,
+		mustImport: make(map[*inspect.Import]struct{}),
+	}
+	g.preload()
+
 	var code bytes.Buffer
 	if err = template.Must(
 		template.New("visc").
-			Funcs(template.FuncMap{
-				"genGetterSetter": genGetterSetter,
-			}).
 			Parse(genTemplate),
-	).Execute(&code, &TaggedPackage{pkg, *buildTags}); err != nil {
+	).Execute(&code, g); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -80,12 +84,32 @@ func main() {
 	}
 }
 
-type TaggedPackage struct {
+type Generator struct {
 	*inspect.Package
-	Tag string
+	Tag        string
+	mustImport map[*inspect.Import]struct{}
+	out        strings.Builder
 }
 
-func genGetterSetter(t *inspect.Type) string {
+func (g *Generator) MustImport() []*inspect.Import {
+	imports := make([]*inspect.Import, 0, len(g.mustImport))
+	for imported := range g.mustImport {
+		imports = append(imports, imported)
+	}
+	return imports
+}
+
+func (g *Generator) Code() string {
+	return g.out.String()
+}
+
+func (g *Generator) preload() {
+	for _, target := range g.Targets {
+		g.genGetterSetter(target)
+	}
+}
+
+func (g *Generator) genGetterSetter(t *inspect.Type) {
 	var (
 		all       bool
 		allPrefix string
@@ -115,7 +139,6 @@ func genGetterSetter(t *inspect.Type) string {
 			}
 		}
 	}
-	var w strings.Builder
 	receiver := t.String()
 	for _, field := range t.Spec.Type.(*ast.StructType).Fields.List {
 		for _, name := range field.Names {
@@ -133,15 +156,37 @@ func genGetterSetter(t *inspect.Type) string {
 			if setterTag := tag.Get("setter"); setterTag != "-" && all && allSetter {
 				setter, hasSetter = "Set"+toCamel(name.String()), true
 			}
+			var typ string
+			if hasGetter || hasSetter {
+				typ = g.toString(field.Type)
+			}
 			if hasGetter {
-				genFieldGetter(&w, receiver, getter, name.String(), toString(t.Fset, field.Type), isRef)
+				genFieldGetter(&g.out, receiver, getter, name.String(), typ, isRef)
 			}
 			if hasSetter {
-				genFieldSetter(&w, receiver, setter, name.String(), toString(t.Fset, field.Type))
+				genFieldSetter(&g.out, receiver, setter, name.String(), typ)
 			}
 		}
 	}
-	return w.String()
+}
+
+func (g *Generator) toString(expr ast.Expr) string {
+	var buf strings.Builder
+	if err := format.Node(&buf, g.GetFset(), expr); err != nil {
+		log.Fatalln(err)
+	}
+	if star, ok := expr.(*ast.StarExpr); ok {
+		expr = star.X
+	}
+	if named, ok := g.GetInfo().TypeOf(expr).(*types.Named); ok {
+		pkg := named.Obj().Pkg()
+		for _, rawImport := range g.Imports {
+			if rawImport.Path == pkg.Path() {
+				g.mustImport[rawImport] = struct{}{}
+			}
+		}
+	}
+	return buf.String()
 }
 
 func inspectField(name string, tag reflect.StructTag) (getter string, hasGetter bool, isRef bool, setter string, hasSetter bool) {
@@ -243,14 +288,6 @@ func refValue(isRef bool) string {
 func genFieldSetter(w io.Writer, receiver string, method string, field string, typ string) {
 	fmt.Fprintf(w, "func (instance *%s) %s(value %s) { instance.%s = value }\n",
 		receiver, method, typ, field)
-}
-
-func toString(fset *token.FileSet, node ast.Node) string {
-	var buf strings.Builder
-	if err := format.Node(&buf, fset, node); err != nil {
-		log.Fatalln(err)
-	}
-	return buf.String()
 }
 
 const VISCPrefix = "visc:"

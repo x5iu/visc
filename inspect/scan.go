@@ -19,10 +19,20 @@ import (
 )
 
 type Package struct {
-	fset    *token.FileSet
+	fset *token.FileSet
+	info *types.Info
+
 	Name    string
 	Imports []*Import
 	Targets []*Type
+}
+
+func (p *Package) GetFset() *token.FileSet {
+	return p.fset
+}
+
+func (p *Package) GetInfo() *types.Info {
+	return p.info
 }
 
 type Import struct {
@@ -102,6 +112,7 @@ func Scan(dir string, files []string) (*Package, error) {
 		if err != nil {
 			return nil, err
 		}
+		out.info = info
 		imports := make(map[string]*ast.Ident, 8)
 		imported := make(map[string]struct{})
 		ast.Inspect(p, func(input ast.Node) bool {
