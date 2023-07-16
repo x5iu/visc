@@ -32,6 +32,7 @@ type Import struct {
 
 type Type struct {
 	Fset *token.FileSet
+	Decl *ast.GenDecl
 	Spec *ast.TypeSpec
 }
 
@@ -61,7 +62,7 @@ func Scan(dir string, files []string) (*Package, error) {
 		dir = filepath.Join(pwd, dir)
 	}
 	fset := token.NewFileSet()
-	packages, err := parser.ParseDir(fset, dir, filter(files), 0)
+	packages, err := parser.ParseDir(fset, dir, filter(files), parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
@@ -112,39 +113,46 @@ func Scan(dir string, files []string) (*Package, error) {
 				path, _ := strconv.Unquote(node.Path.Value)
 				imports[path] = node.Name
 				return true
-			case *ast.File, *ast.GenDecl:
+			case *ast.File:
 				return true
-			case *ast.TypeSpec:
-				if _, ok := node.Type.(*ast.StructType); ok {
-					out.Targets = append(out.Targets, &Type{
-						Fset: fset,
-						Spec: node,
-					})
-					ast.Inspect(node.Type, func(structType ast.Node) bool {
-						switch expr := structType.(type) {
-						case ast.Expr:
-							if named, ok := info.TypeOf(expr).(*types.Named); ok {
-								if objPkg := named.Obj().Pkg(); objPkg != nil {
-									if alias, exists := imports[objPkg.Path()]; exists {
-										if _, duplicated := imported[objPkg.Path()]; !duplicated {
-											var name string
-											if alias != nil {
-												name = alias.String()
+			case *ast.GenDecl:
+				if node.Tok == token.TYPE {
+					for _, spec := range node.Specs {
+						if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+							if _, ok := typeSpec.Type.(*ast.StructType); ok {
+								out.Targets = append(out.Targets, &Type{
+									Fset: fset,
+									Decl: node,
+									Spec: typeSpec,
+								})
+								ast.Inspect(typeSpec.Type, func(structType ast.Node) bool {
+									switch expr := structType.(type) {
+									case ast.Expr:
+										if named, ok := info.TypeOf(expr).(*types.Named); ok {
+											if objPkg := named.Obj().Pkg(); objPkg != nil {
+												if alias, exists := imports[objPkg.Path()]; exists {
+													if _, duplicated := imported[objPkg.Path()]; !duplicated {
+														var name string
+														if alias != nil {
+															name = alias.String()
+														}
+														out.Imports = append(out.Imports, &Import{
+															Name: name,
+															Path: objPkg.Path(),
+														})
+														imported[objPkg.Path()] = struct{}{}
+													}
+												}
 											}
-											out.Imports = append(out.Imports, &Import{
-												Name: name,
-												Path: objPkg.Path(),
-											})
-											imported[objPkg.Path()] = struct{}{}
 										}
 									}
-								}
+									return true
+								})
 							}
 						}
-						return true
-					})
+					}
 				}
-				return false
+				return true
 			}
 			return false
 		})

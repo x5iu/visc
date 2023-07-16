@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -85,18 +86,53 @@ type TaggedPackage struct {
 }
 
 func genGetterSetter(t *inspect.Type) string {
+	var (
+		all       bool
+		allPrefix string
+		allGetter bool
+		allSetter bool
+	)
+	if t.Decl.Doc != nil || t.Spec.Doc != nil {
+		var found bool
+		list := make([]*ast.Comment, 8)
+		if t.Decl.Doc != nil {
+			list = append(list, t.Decl.Doc.List...)
+		}
+		if t.Spec.Doc != nil {
+			list = append(list, t.Spec.Doc.List...)
+		}
+		drtAll := getDirective(list, "all")
+		allPrefix, found = drtAll.Lookup("prefix")
+		all = found && drtAll != ""
+		if all {
+			allGetterOpt, found := drtAll.Lookup("getter")
+			if b, err := strconv.ParseBool(allGetterOpt); found && err == nil {
+				allGetter = b
+			}
+			allSetterOpt, found := drtAll.Lookup("setter")
+			if b, err := strconv.ParseBool(allSetterOpt); found && err == nil {
+				allSetter = b
+			}
+		}
+	}
 	var w strings.Builder
 	receiver := t.String()
 	for _, field := range t.Spec.Type.(*ast.StructType).Fields.List {
 		for _, name := range field.Names {
-			var tag string
+			var tag reflect.StructTag
 			if lit := field.Tag; lit != nil {
-				tag = lit.Value[1 : len(lit.Value)-1]
+				tag = reflect.StructTag(lit.Value[1 : len(lit.Value)-1])
 			}
 			getter, hasGetter, isRef, setter, hasSetter := inspectField(
 				name.String(),
-				reflect.StructTag(tag),
+				tag,
 			)
+			if getterTag := tag.Get("getter"); getterTag != "-" && all && allGetter {
+				getter, hasGetter, isRef = allPrefix+toCamel(name.String()), true, false
+			}
+			if setterTag := tag.Get("setter"); setterTag != "-" && all && allSetter {
+				setter, hasSetter = "Set"+toCamel(name.String()), true
+			}
 			if hasGetter {
 				genFieldGetter(&w, receiver, getter, name.String(), toString(t.Fset, field.Type), isRef)
 			}
@@ -215,4 +251,67 @@ func toString(fset *token.FileSet, node ast.Node) string {
 		log.Fatalln(err)
 	}
 	return buf.String()
+}
+
+const VISCPrefix = "visc:"
+
+type Directive string
+
+func (d Directive) Lookup(name string) (value string, found bool) {
+	var (
+		directive = string(d)
+		param     string
+	)
+iter:
+	for len(directive) > 0 {
+		for i, c := range directive {
+			switch c {
+			case '=':
+				param = strings.TrimSpace(directive[:i])
+				directive = directive[i+1:]
+				continue iter
+			case ',':
+				value = strings.TrimSpace(directive[:i])
+				if param == name {
+					return value, true
+				}
+				directive = directive[i+1:]
+				continue iter
+			}
+		}
+		if param == name {
+			return strings.TrimSpace(directive), true
+		}
+		directive = ""
+	}
+	return "", false
+}
+
+func getDirective(list []*ast.Comment, command string) Directive {
+	for _, comment := range list {
+		if comment == nil {
+			continue
+		}
+		var text string
+		switch comment.Text[1] {
+		case '/':
+			text = strings.TrimSpace(comment.Text[2:])
+		case '*':
+			text = comment.Text[2 : len(comment.Text)-2]
+		}
+		if strings.HasPrefix(text, VISCPrefix) {
+			text = text[len(VISCPrefix):]
+			if text[len(text)-1] == ')' {
+				for i, c := range text {
+					if c == '(' {
+						directive := text[:i]
+						if directive == command {
+							return Directive(text[i+1 : len(text)-1])
+						}
+					}
+				}
+			}
+		}
+	}
+	return ""
 }
