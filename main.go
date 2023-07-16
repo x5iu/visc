@@ -110,6 +110,7 @@ func (g *Generator) preload() {
 }
 
 func (g *Generator) genGetterSetter(t *inspect.Type) {
+	fmt.Fprintf(&g.out, "\n\n")
 	var (
 		all          bool
 		allGetPrefix string
