@@ -116,8 +116,12 @@ func (g *Generator) genGetterSetter(t *inspect.Type) {
 		allGetter bool
 		allSetter bool
 	)
+	var (
+		construct       bool
+		constructName   string
+		constructPrefix string
+	)
 	if t.Decl.Doc != nil || t.Spec.Doc != nil {
-		var found bool
 		list := make([]*ast.Comment, 8)
 		if t.Decl.Doc != nil {
 			list = append(list, t.Decl.Doc.List...)
@@ -126,9 +130,8 @@ func (g *Generator) genGetterSetter(t *inspect.Type) {
 			list = append(list, t.Spec.Doc.List...)
 		}
 		drtAll := getDirective(list, "all")
-		allPrefix, found = drtAll.Lookup("prefix")
-		all = found && drtAll != ""
-		if all {
+		if all = drtAll != ""; all {
+			allPrefix, _ = drtAll.Lookup("prefix")
 			allGetterOpt, found := drtAll.Lookup("getter")
 			if b, err := strconv.ParseBool(allGetterOpt); found && err == nil {
 				allGetter = b
@@ -138,9 +141,20 @@ func (g *Generator) genGetterSetter(t *inspect.Type) {
 				allSetter = b
 			}
 		}
+		drtConstruct := getDirective(list, "construct")
+		if construct = drtConstruct != ""; construct {
+			var found bool
+			constructPrefix, _ = drtConstruct.Lookup("prefix")
+			constructName, found = drtConstruct.Lookup("name")
+			if !found {
+				constructName = "construct"
+			}
+		}
 	}
 	receiver := t.String()
-	for _, field := range t.Spec.Type.(*ast.StructType).Fields.List {
+	structType := t.Spec.Type.(*ast.StructType)
+	cx := make([]*constructCtx, 0, len(structType.Fields.List))
+	for _, field := range structType.Fields.List {
 		for _, name := range field.Names {
 			var tag reflect.StructTag
 			if lit := field.Tag; lit != nil {
@@ -150,10 +164,10 @@ func (g *Generator) genGetterSetter(t *inspect.Type) {
 				name.String(),
 				tag,
 			)
-			if getterTag := tag.Get("getter"); getterTag != "-" && all && allGetter {
+			if getterTag := tag.Get("getter"); getterTag != "-" && all && allGetter && !hasGetter {
 				getter, hasGetter, isRef = allPrefix+toCamel(name.String()), true, false
 			}
-			if setterTag := tag.Get("setter"); setterTag != "-" && all && allSetter {
+			if setterTag := tag.Get("setter"); setterTag != "-" && all && allSetter && !hasSetter {
 				setter, hasSetter = "Set"+toCamel(name.String()), true
 			}
 			var typ string
@@ -165,8 +179,16 @@ func (g *Generator) genGetterSetter(t *inspect.Type) {
 			}
 			if hasSetter {
 				genFieldSetter(&g.out, receiver, setter, name.String(), typ)
+				cx = append(cx, &constructCtx{
+					Field: name.String(),
+					Type:  typ,
+					Set:   setter,
+				})
 			}
 		}
+	}
+	if construct {
+		g.genConstruct(receiver, constructName, constructPrefix, cx)
 	}
 }
 
@@ -187,6 +209,25 @@ func (g *Generator) toString(expr ast.Expr) string {
 		}
 	}
 	return buf.String()
+}
+
+type constructCtx struct {
+	Field string
+	Type  string
+	Set   string
+}
+
+func (g *Generator) genConstruct(receiver string, name string, prefix string, cx []*constructCtx) {
+	fmt.Fprintf(&g.out, "\n\nfunc (instance *%s) %s(constructor interface { \n", receiver, name)
+	for _, getter := range cx {
+		fmt.Fprintf(&g.out, "%s%s() %s\n", prefix, toCamel(getter.Field), getter.Type)
+	}
+	fmt.Fprintf(&g.out, "}) *%s { \n", receiver)
+	for _, setter := range cx {
+		fmt.Fprintf(&g.out, "instance.%s(constructor.%s%s())\n", setter.Set, prefix, toCamel(setter.Field))
+	}
+	fmt.Fprintf(&g.out, "return instance\n")
+	fmt.Fprintf(&g.out, "}")
 }
 
 func inspectField(name string, tag reflect.StructTag) (getter string, hasGetter bool, isRef bool, setter string, hasSetter bool) {
