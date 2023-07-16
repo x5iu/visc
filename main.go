@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -104,6 +105,9 @@ func (g *Generator) Code() string {
 }
 
 func (g *Generator) preload() {
+	sort.SliceStable(g.Targets, func(i, j int) bool {
+		return g.Targets[i].String() < g.Targets[j].String()
+	})
 	for _, target := range g.Targets {
 		g.genGetterSetter(target)
 	}
