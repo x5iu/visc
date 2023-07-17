@@ -1,6 +1,6 @@
 # VISC
 
-`visc` 是一个用于生成结构体字段 `getter`/`setter` 方法的代码生成工具。虽然像 Goland 这样的 IDE 也提供 `getter`/`setter` 方法生成功能，但 `visc` 拥有更多自定义配置的生成方式，例如字段代理（生成结构体内某个字段其字段的 `getter`/`setter` 方法）。
+`visc` 是一个用于生成结构体字段 `getter`/`setter` 方法、以及生成结构体构造方法的代码生成工具。虽然像 Goland 这样的 IDE 也提供 `getter`/`setter` 方法生成功能，但 `visc` 拥有更多自定义配置的生成方式，并且支持生成快速构造结构体字段值的构造方法。
 
 ## 使用方式
 
@@ -10,9 +10,46 @@
 //go:generate visc [file]...
 ```
 
-`visc` 命令将默认扫描包内所有的结构体，并为目标结构体（目标结构体指：字段 tag、即 StructTag 中有对应 `getter`/`setter` 标签 的结构体）生成相应的 `getter`/`setter` 方法。可以通过可选的位置参数 `file` 来指定只扫描特定文件内的结构体。额外的，`visc` 仅扫描可导出的（Exported）的结构体，私有的结构体将不会生成 `getter`/`setter`。
+`visc` 命令将默认扫描包内所有的结构体，并为目标结构体（目标结构体指：字段 tag、即 StructTag 中有对应 `getter`/`setter` 标签 的结构体，或在结构体的文档注释中包含 `visc` 指令的结构体）生成相应的 `getter`/`setter` 方法。可以通过可选的位置参数 `file` 来指定只扫描特定文件内的结构体。额外的，`visc` 仅扫描可导出的（Exported）的结构体，私有的结构体将不会生成 `getter`/`setter`。
 
-***注：`visc` 仅支持在非 `main` 包中使用，这是由于其在生成代码的过程中，会生成中间代码并引入目标包的结构体类型，而 `main` 包不支持被导入。*** 
+~~***注：`visc` 仅支持在非 `main` 包中使用，这是由于其在生成代码的过程中，会生成中间代码并引入目标包的结构体类型，而 `main` 包不支持被导入。***~~ 
+
+***更新：从 v0.2 版本开始，通过使用静态代码分析，visc 也支持在 `main` 包中使用。*** 
+
+### visc 指令
+
+```go
+// visc:all(getter=true, getPrefix=Get, setter=true, setPrefix=Set)
+type T struct {
+  Field string
+}
+```
+
+`visc:all` 指令用于为所有 StructFields 生成 `getter/setter` 而不需要单独为每个字段添加 StructTag，使用 `getter=true` 和 `setter=true` 来指定是否生成 `getter/setter`，使用 `getPrefix=Get` 和 `setPrefix=Set` 来指定生成的 `getter/setter` 应该带有何种前缀；在上述例子中，生成的 `getter` 和 `setter` 分别为 `GetField` 和 `SetField`。
+
+额外的，如果结构体中某个字段已经设置了 `getter`/`setter` StructTag，则优先使用 StructTag 的内容生成对应的 `getter`/`setter`，如果 StructTag 的内容为 `-`，则即使配置了 `visc:all` 指令，也不会生成该字段对应的 `getter`/`setter`。
+
+````go
+// visc:construct(name=construct, prefix=Get)
+type T struct {
+  Field string `setter:"setField"`
+}
+````
+
+`visc:construct` 指令用于生成该结构体的构造方法，生成结果如下所示：
+
+````go
+func (instance *T) construct(constructor interface {
+	GetField() string
+}) *T {
+	instance.setField(constructor.GetField())
+	return instance
+}
+````
+
+`visc:construct` 仅会对拥有 `setter` 方法的字段生成对应的赋值代码，即上述例子中的 `instance.setField(constructor.GetField())`。
+
+*作者注：生成这样的构造方法有什么用？这是源于我在 DDD（领域驱动设计）的实践中，困扰于 DDD 各层级之间数据交互需要频繁地在各种 DTO 之间进行转换，而这些 DTO 在结构上又非常相似（甚至可以说大部分 DTO 是完全一致的），我常常需要写很多 DTO 之间转换拷贝赋值的代码，这非常花时间。这也是 `visc@v0.2` 新增特性的起因，通过代码静态分析生成结构体的构造方法，这个构造方法接收一个接口类型，该接口类型定义了一系列 `getter` 方法，通过 get 值并 set 的方式完成结构体的转换拷贝赋值，而实现这个接口类型的结构体，也可以由 `visc` 完成生成对应 `getter` 的操作，这极大地提高了 DTO 转换的效率。*
 
 ### StructTag: getter
 
@@ -51,7 +88,9 @@ type (instance *User) SetName(value sql.NullString) { instance.name = value }
 
 
 
-### proxy 模式
+### proxy 模式（已移除）
+
+**Deprecated: 从 `v0.2` 开始，visc 不再支持 proxy 模式，如果需要使用 proxy，请酌情使用 `v0.1` 版本的 visc；实际上，proxy 模式在实际的编码场景并不常见，应该考虑使用其他方式代替 proxy。**
 
 使用 `getter:",proxy=Name Age"` 来代理结构体中对应字段下的 `Name` 字段（`setter` 同理），例如：
 
@@ -74,9 +113,7 @@ type (instance *User) Valid() bool { return instance.name.Valid }
 
 由于 `visc` 会生成中间代码并使用 `reflect` 扫描结构体，因此你无需担心包引入的问题，`visc` 会自动将需要引入的包引入并正确处理导入的类型，例如，当你的代码使用了 `sql.NullString` 类型时，`visc` 会自动导入 `database/sql` 包。
 
-### 适用范围
-
-同样由于 `visc` 会生成中间代码的原因，`getter`/`setter` 生成功能仅支持在非 `main` 包中使用。
+**从 `v0.2` 版本开始，自动包引入功能由生成中间代码并使用 `reflect` 扫描结构体的方式，更改为静态代码分析的方式，静态代码分析不仅效率更高，并且限制更少，对泛型的兼容性更好。**
 
 ### 关于泛型
 
@@ -88,14 +125,10 @@ type (instance *User) Valid() bool { return instance.name.Valid }
 Usage of visc:
   -buildtags
     	生成的文件所携带的 build tags（注意，格式应为 // +build 指令的格式，而非 //go:build 指令的格式）
-  -gentags
-    	在执行 "go run visc.*.go" 进行代码生成时，会将 -gentags 的值传递至 "go run" 命令
   -output
     	指定生成的文件名称，默认为 "visc.gen.go"
   -version
     	visc version
-  -keeptemp
-    	保留生成代码时所产生的中间文件（文件名为 visc.*.go）
 ```
 
 ## 使用场景
@@ -106,4 +139,4 @@ Usage of visc:
 
 ## 致谢
 
-`visc` 在中间代码生成及对于导入类型及包的处理上借鉴了 `[easyjson](https://github.com/mailru/easyjson)` 相关代码，特此鸣谢。
+`visc@v0.1` 在中间代码生成及对于导入类型及包的处理上借鉴了 `[easyjson](https://github.com/mailru/easyjson)` 相关代码，特此鸣谢。
