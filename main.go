@@ -21,7 +21,7 @@ import (
 	_ "embed"
 )
 
-const Version = "v0.2.0"
+const Version = "v0.2.1"
 
 //go:embed gen.tmpl
 var genTemplate string
@@ -204,17 +204,20 @@ func (g *Generator) toString(expr ast.Expr) string {
 	if err := format.Node(&buf, g.GetFset(), expr); err != nil {
 		log.Fatalln(err)
 	}
-	if star, ok := expr.(*ast.StarExpr); ok {
-		expr = star.X
-	}
-	if named, ok := g.GetInfo().TypeOf(expr).(*types.Named); ok {
-		pkg := named.Obj().Pkg()
-		for _, rawImport := range g.Imports {
-			if rawImport.Path == pkg.Path() {
-				g.mustImport[rawImport] = struct{}{}
+	ast.Inspect(expr, func(node ast.Node) bool {
+		switch x := node.(type) {
+		case ast.Expr:
+			if named, ok := g.GetInfo().TypeOf(x).(*types.Named); ok {
+				pkg := named.Obj().Pkg()
+				for _, rawImport := range g.Imports {
+					if rawImport.Path == pkg.Path() {
+						g.mustImport[rawImport] = struct{}{}
+					}
+				}
 			}
 		}
-	}
+		return true
+	})
 	return buf.String()
 }
 
