@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,7 +22,7 @@ import (
 	_ "embed"
 )
 
-const Version = "v0.2.1"
+const Version = "v0.3.0"
 
 //go:embed gen.tmpl
 var genTemplate string
@@ -113,6 +114,8 @@ func (g *Generator) preload() {
 	}
 }
 
+var fnRe = regexp.MustCompile(`(\w+?)\(([a-zA-Z0-9_\.]+?)\)`)
+
 func (g *Generator) genGetterSetter(t *inspect.Type) {
 	fmt.Fprintf(&g.out, "\n\n")
 	var (
@@ -191,6 +194,14 @@ func (g *Generator) genGetterSetter(t *inspect.Type) {
 					Type:  typ,
 					Set:   setter,
 				})
+			} else if constructFunc, ok := tag.Lookup("construct"); ok {
+				if match := fnRe.FindStringSubmatch(constructFunc); match != nil && len(match) > 2 {
+					cx = append(cx, &constructCtx{
+						Field: name.String(),
+						Type:  match[2],
+						Set:   match[1],
+					})
+				}
 			}
 		}
 	}
