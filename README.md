@@ -86,7 +86,24 @@ type User struct {
 type (instance *User) SetName(value sql.NullString) { instance.name = value }
 ```
 
+从 `v0.3.0` 版本开始，`visc` 新增了 `construct` StructTag，其作用是当你想自定义 constructor 的 `Set` 方法时，你可以像这样来指定不生成/使用默认的 `setter`，而是使用你自定义的 `setter`：
 
+```go
+type User struct {
+  id int64
+  name sql.NullString `setter:"-" construct:"MySetName(string)"`
+}
+
+// User defined Method
+type (user *User) MySetName(name string) { 
+    instance.name = sql.NullString{
+		Valid:  true,
+        String: name,
+    } 
+}
+```
+
+其格式为 `$METHOD($TYPE)`，其中，`$METHOD` 是用户自定义的方法名，`$TYPE` 是参数类型。
 
 ### proxy 模式（已移除）
 
@@ -139,4 +156,4 @@ Usage of visc:
 
 ## 致谢
 
-`visc@v0.1` 在中间代码生成及对于导入类型及包的处理上借鉴了 `[easyjson](https://github.com/mailru/easyjson)` 相关代码，特此鸣谢。
+`visc@v0.1` 在中间代码生成及对于导入类型及包的处理上借鉴了 [easyjson](https://github.com/mailru/easyjson) 相关代码，特此鸣谢。
