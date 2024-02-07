@@ -97,7 +97,7 @@ type User struct {
 // User defined Method
 type (user *User) MySetName(name string) { 
     instance.name = sql.NullString{
-		Valid:  true,
+        Valid:  true,
         String: name,
     } 
 }
