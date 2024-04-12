@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/build"
-	"go/importer"
 	"go/parser"
 	"go/printer"
 	"go/token"
@@ -14,7 +13,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -89,41 +87,41 @@ func Scan(dir string, files []string) (*Package, error) {
 		for _, file := range p.Files {
 			astFiles = append(astFiles, file)
 		}
-		conf := types.Config{
-			IgnoreFuncBodies: true,
-			FakeImportC:      true,
-			Importer: &Importer{
-				imported:      map[string]*types.Package{},
-				tokenFileSet:  fset,
-				defaultImport: importer.Default(),
-			},
-		}
-		info := &types.Info{
-			Types:      map[ast.Expr]types.TypeAndValue{},
-			Instances:  map[*ast.Ident]types.Instance{},
-			Defs:       map[*ast.Ident]types.Object{},
-			Uses:       map[*ast.Ident]types.Object{},
-			Implicits:  map[ast.Node]types.Object{},
-			Selections: map[*ast.SelectorExpr]*types.Selection{},
-			Scopes:     map[ast.Node]*types.Scope{},
-			InitOrder:  []*types.Initializer{},
-		}
-		_, err = conf.Check(p.Name, fset, astFiles, info)
-		if err != nil {
-			return nil, err
-		}
-		out.info = info
-		imports := make(map[string]*ast.Ident, 8)
-		imported := make(map[string]struct{})
+		//conf := types.Config{
+		//	IgnoreFuncBodies: true,
+		//	FakeImportC:      true,
+		//	Importer: &Importer{
+		//		imported:      map[string]*types.Package{},
+		//		tokenFileSet:  fset,
+		//		defaultImport: importer.Default(),
+		//	},
+		//}
+		//info := &types.Info{
+		//	Types:      map[ast.Expr]types.TypeAndValue{},
+		//	Instances:  map[*ast.Ident]types.Instance{},
+		//	Defs:       map[*ast.Ident]types.Object{},
+		//	Uses:       map[*ast.Ident]types.Object{},
+		//	Implicits:  map[ast.Node]types.Object{},
+		//	Selections: map[*ast.SelectorExpr]*types.Selection{},
+		//	Scopes:     map[ast.Node]*types.Scope{},
+		//	InitOrder:  []*types.Initializer{},
+		//}
+		//_, err = conf.Check(p.Name, fset, astFiles, info)
+		//if err != nil {
+		//	return nil, err
+		//}
+		//out.info = info
+		//imports := make(map[string]*ast.Ident, 8)
+		//imported := make(map[string]struct{})
 		ast.Inspect(p, func(input ast.Node) bool {
 			switch node := input.(type) {
 			case *ast.Package:
 				out.Name = node.Name
 				return true
-			case *ast.ImportSpec:
-				path, _ := strconv.Unquote(node.Path.Value)
-				imports[path] = node.Name
-				return true
+			//case *ast.ImportSpec:
+			//	path, _ := strconv.Unquote(node.Path.Value)
+			//	imports[path] = node.Name
+			//	return true
 			case *ast.File:
 				return true
 			case *ast.GenDecl:
@@ -136,29 +134,29 @@ func Scan(dir string, files []string) (*Package, error) {
 									Decl: node,
 									Spec: typeSpec,
 								})
-								ast.Inspect(typeSpec.Type, func(structType ast.Node) bool {
-									switch expr := structType.(type) {
-									case ast.Expr:
-										if named, ok := info.TypeOf(expr).(*types.Named); ok {
-											if objPkg := named.Obj().Pkg(); objPkg != nil {
-												if alias, exists := imports[objPkg.Path()]; exists {
-													if _, duplicated := imported[objPkg.Path()]; !duplicated {
-														var name string
-														if alias != nil {
-															name = alias.String()
-														}
-														out.Imports = append(out.Imports, &Import{
-															Name: name,
-															Path: objPkg.Path(),
-														})
-														imported[objPkg.Path()] = struct{}{}
-													}
-												}
-											}
-										}
-									}
-									return true
-								})
+								//ast.Inspect(typeSpec.Type, func(structType ast.Node) bool {
+								//	switch expr := structType.(type) {
+								//	case ast.Expr:
+								//		if named, ok := info.TypeOf(expr).(*types.Named); ok {
+								//			if objPkg := named.Obj().Pkg(); objPkg != nil {
+								//				if alias, exists := imports[objPkg.Path()]; exists {
+								//					if _, duplicated := imported[objPkg.Path()]; !duplicated {
+								//						var name string
+								//						if alias != nil {
+								//							name = alias.String()
+								//						}
+								//						out.Imports = append(out.Imports, &Import{
+								//							Name: name,
+								//							Path: objPkg.Path(),
+								//						})
+								//						imported[objPkg.Path()] = struct{}{}
+								//					}
+								//				}
+								//			}
+								//		}
+								//	}
+								//	return true
+								//})
 							}
 						}
 					}

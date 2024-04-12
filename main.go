@@ -7,7 +7,7 @@ import (
 	"github.com/x5iu/visc/inspect"
 	"go/ast"
 	"go/format"
-	"go/types"
+	goimport "golang.org/x/tools/imports"
 	"io"
 	"log"
 	"os"
@@ -22,7 +22,7 @@ import (
 	_ "embed"
 )
 
-const Version = "v0.3.0"
+const Version = "v0.4.0"
 
 //go:embed gen.tmpl
 var genTemplate string
@@ -82,6 +82,15 @@ func main() {
 	}
 
 	if err = os.WriteFile(*output, formatted, 0644); err != nil {
+		log.Fatalln(err)
+	}
+
+	fixed, err := goimport.Process(*output, formatted, nil)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	if err = os.WriteFile(*output, fixed, 0644); err != nil {
 		log.Fatalln(err)
 	}
 }
@@ -215,20 +224,20 @@ func (g *Generator) toString(expr ast.Expr) string {
 	if err := format.Node(&buf, g.GetFset(), expr); err != nil {
 		log.Fatalln(err)
 	}
-	ast.Inspect(expr, func(node ast.Node) bool {
-		switch x := node.(type) {
-		case ast.Expr:
-			if named, ok := g.GetInfo().TypeOf(x).(*types.Named); ok {
-				pkg := named.Obj().Pkg()
-				for _, rawImport := range g.Imports {
-					if rawImport.Path == pkg.Path() {
-						g.mustImport[rawImport] = struct{}{}
-					}
-				}
-			}
-		}
-		return true
-	})
+	//ast.Inspect(expr, func(node ast.Node) bool {
+	//	switch x := node.(type) {
+	//	case ast.Expr:
+	//		if named, ok := g.GetInfo().TypeOf(x).(*types.Named); ok {
+	//			pkg := named.Obj().Pkg()
+	//			for _, rawImport := range g.Imports {
+	//				if rawImport.Path == pkg.Path() {
+	//					g.mustImport[rawImport] = struct{}{}
+	//				}
+	//			}
+	//		}
+	//	}
+	//	return true
+	//})
 	return buf.String()
 }
 
