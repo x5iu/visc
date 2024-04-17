@@ -22,7 +22,7 @@ import (
 	_ "embed"
 )
 
-const Version = "v0.5.0"
+const Version = "v0.5.1"
 
 //go:embed gen.tmpl
 var genTemplate string
@@ -110,7 +110,7 @@ func init() {
 	flags.StringVar(&buildTags, "buildtags", "", "tags attached to output file")
 	flags.StringVar(&output, "output", "", "output file")
 	flags.StringSliceVar(&targetTypes, "types", nil, "target type")
-	Command.MarkFlagRequired("output")
+	Command.MarkPersistentFlagRequired("output")
 
 	flags.BoolVar(&setter, "setter", false, "setter flag")
 	flags.StringVar(&setPrefix, "setPrefix", "", "setter prefix")
