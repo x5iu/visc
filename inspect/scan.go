@@ -61,7 +61,7 @@ func (t *Type) String() string {
 	return spec
 }
 
-func Scan(dir string, files []string) (*Package, error) {
+func Scan(dir string, files []string, types []string) (*Package, error) {
 	if !filepath.IsAbs(dir) {
 		pwd, err := os.Getwd()
 		if err != nil {
@@ -129,34 +129,36 @@ func Scan(dir string, files []string) (*Package, error) {
 					for _, spec := range node.Specs {
 						if typeSpec, ok := spec.(*ast.TypeSpec); ok {
 							if _, ok := typeSpec.Type.(*ast.StructType); ok {
-								out.Targets = append(out.Targets, &Type{
-									Fset: fset,
-									Decl: node,
-									Spec: typeSpec,
-								})
-								//ast.Inspect(typeSpec.Type, func(structType ast.Node) bool {
-								//	switch expr := structType.(type) {
-								//	case ast.Expr:
-								//		if named, ok := info.TypeOf(expr).(*types.Named); ok {
-								//			if objPkg := named.Obj().Pkg(); objPkg != nil {
-								//				if alias, exists := imports[objPkg.Path()]; exists {
-								//					if _, duplicated := imported[objPkg.Path()]; !duplicated {
-								//						var name string
-								//						if alias != nil {
-								//							name = alias.String()
-								//						}
-								//						out.Imports = append(out.Imports, &Import{
-								//							Name: name,
-								//							Path: objPkg.Path(),
-								//						})
-								//						imported[objPkg.Path()] = struct{}{}
-								//					}
-								//				}
-								//			}
-								//		}
-								//	}
-								//	return true
-								//})
+								if filterTypes(types, typeSpec.Name.String()) {
+									out.Targets = append(out.Targets, &Type{
+										Fset: fset,
+										Decl: node,
+										Spec: typeSpec,
+									})
+									//ast.Inspect(typeSpec.Type, func(structType ast.Node) bool {
+									//	switch expr := structType.(type) {
+									//	case ast.Expr:
+									//		if named, ok := info.TypeOf(expr).(*types.Named); ok {
+									//			if objPkg := named.Obj().Pkg(); objPkg != nil {
+									//				if alias, exists := imports[objPkg.Path()]; exists {
+									//					if _, duplicated := imported[objPkg.Path()]; !duplicated {
+									//						var name string
+									//						if alias != nil {
+									//							name = alias.String()
+									//						}
+									//						out.Imports = append(out.Imports, &Import{
+									//							Name: name,
+									//							Path: objPkg.Path(),
+									//						})
+									//						imported[objPkg.Path()] = struct{}{}
+									//					}
+									//				}
+									//			}
+									//		}
+									//	}
+									//	return true
+									//})
+								}
 							}
 						}
 					}
@@ -167,6 +169,18 @@ func Scan(dir string, files []string) (*Package, error) {
 		})
 	}
 	return out, nil
+}
+
+func filterTypes(types []string, defType string) bool {
+	if len(types) == 0 {
+		return true
+	}
+	for _, t := range types {
+		if t == defType {
+			return true
+		}
+	}
+	return false
 }
 
 func filter(files []string) func(info fs.FileInfo) bool {
