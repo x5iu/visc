@@ -22,7 +22,13 @@ import (
 	_ "embed"
 )
 
-const Version = "v0.5.1"
+var (
+	ProgramName     = "visc"
+	GeneratorName   = "visc"
+	DirectivePrefix = "visc:"
+)
+
+const Version = "v0.6.0"
 
 //go:embed gen.tmpl
 var genTemplate string
@@ -46,7 +52,7 @@ var (
 )
 
 var Command = &cobra.Command{
-	Use:     "visc",
+	Use:     ProgramName,
 	Version: Version,
 	PreRun: func(cmd *cobra.Command, args []string) {
 		if len(targetTypes) != 1 && (setter || getter || makeConstructor) {
@@ -70,6 +76,7 @@ var Command = &cobra.Command{
 
 		g := &Generator{
 			Package:    pkg,
+			Generator:  GeneratorName,
 			Tag:        buildTags,
 			mustImport: make(map[*inspect.Import]struct{}),
 		}
@@ -77,7 +84,7 @@ var Command = &cobra.Command{
 
 		var code bytes.Buffer
 		if err = template.Must(
-			template.New("visc").Parse(genTemplate),
+			template.New(ProgramName).Parse(genTemplate),
 		).Execute(&code, g); err != nil {
 			log.Fatalln(err)
 		}
@@ -103,7 +110,7 @@ var Command = &cobra.Command{
 }
 
 func init() {
-	log.SetPrefix("visc: ")
+	log.SetPrefix(ProgramName + ": ")
 	log.SetFlags(log.Lmsgprefix)
 
 	flags := Command.PersistentFlags()
@@ -123,6 +130,7 @@ func init() {
 
 type Generator struct {
 	*inspect.Package
+	Generator  string
 	Tag        string
 	mustImport map[*inspect.Import]struct{}
 	out        strings.Builder
@@ -411,8 +419,6 @@ func genFieldSetter(w io.Writer, receiver string, method string, field string, t
 		receiver, method, typ, field)
 }
 
-const VISCPrefix = "visc:"
-
 type Directive string
 
 func (d Directive) Lookup(name string) (value string, found bool) {
@@ -457,8 +463,8 @@ func getDirective(list []*ast.Comment, command string) Directive {
 		case '*':
 			text = comment.Text[2 : len(comment.Text)-2]
 		}
-		if strings.HasPrefix(text, VISCPrefix) {
-			text = text[len(VISCPrefix):]
+		if strings.HasPrefix(text, DirectivePrefix) {
+			text = text[len(DirectivePrefix):]
 			if text[len(text)-1] == ')' {
 				for i, c := range text {
 					if c == '(' {
