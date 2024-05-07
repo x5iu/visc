@@ -29,7 +29,7 @@ var (
 	DirectivePrefix = "visc:"
 )
 
-const Version = "v0.6.1"
+const Version = "v0.6.2"
 
 //go:embed gen.tmpl
 var genTemplate string
@@ -255,14 +255,7 @@ func (g *Generator) genGetterSetter(t *inspect.Type) {
 			if hasGetter {
 				genFieldGetter(&g.out, receiver, getter, name.String(), typ, isRef)
 			}
-			if hasSetter {
-				genFieldSetter(&g.out, receiver, setter, name.String(), typ)
-				cx = append(cx, &constructCtx{
-					Field: name.String(),
-					Type:  typ,
-					Set:   setter,
-				})
-			} else if constructFunc, ok := tag.Lookup("construct"); ok {
+			if constructFunc, ok := tag.Lookup("construct"); ok {
 				if match := fnRe.FindStringSubmatch(constructFunc); match != nil && len(match) > 2 {
 					cx = append(cx, &constructCtx{
 						Field: name.String(),
@@ -270,6 +263,13 @@ func (g *Generator) genGetterSetter(t *inspect.Type) {
 						Set:   match[1],
 					})
 				}
+			} else if hasSetter {
+				genFieldSetter(&g.out, receiver, setter, name.String(), typ)
+				cx = append(cx, &constructCtx{
+					Field: name.String(),
+					Type:  typ,
+					Set:   setter,
+				})
 			}
 		}
 	}
