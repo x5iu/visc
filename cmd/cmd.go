@@ -3,11 +3,8 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/x5iu/visc/inspect"
 	"go/ast"
 	"go/format"
-	goimport "golang.org/x/tools/imports"
 	"io"
 	"log"
 	"os"
@@ -19,6 +16,10 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/spf13/cobra"
+	"github.com/x5iu/visc/inspect"
+	goimport "golang.org/x/tools/imports"
+
 	_ "embed"
 )
 
@@ -28,7 +29,7 @@ var (
 	DirectivePrefix = "visc:"
 )
 
-const Version = "v0.6.0"
+const Version = "v0.6.1"
 
 //go:embed gen.tmpl
 var genTemplate string
@@ -157,7 +158,7 @@ func (g *Generator) preload() {
 	}
 }
 
-var fnRe = regexp.MustCompile(`(\w+?)\(([a-zA-Z0-9_\.]+?)\)`)
+var fnRe = regexp.MustCompile(`^(\w+?)\((.+?)\)$`)
 
 func (g *Generator) genGetterSetter(t *inspect.Type) {
 	fmt.Fprintf(&g.out, "\n\n")
