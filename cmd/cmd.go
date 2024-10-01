@@ -29,7 +29,7 @@ var (
 	DirectivePrefix = "visc:"
 )
 
-const Version = "v0.6.2"
+const Version = "v0.6.3"
 
 //go:embed gen.tmpl
 var genTemplate string
@@ -111,8 +111,10 @@ var Command = &cobra.Command{
 }
 
 func init() {
-	log.SetPrefix(ProgramName + ": ")
-	log.SetFlags(log.Lmsgprefix)
+	cobra.OnInitialize(func() {
+		log.SetPrefix(ProgramName + ": ")
+		log.SetFlags(log.Lmsgprefix)
+	})
 
 	flags := Command.PersistentFlags()
 	flags.StringVar(&buildTags, "buildtags", "", "tags attached to output file")

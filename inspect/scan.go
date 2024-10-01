@@ -69,6 +69,11 @@ func Scan(dir string, files []string, types []string) (*Package, error) {
 		}
 		dir = filepath.Join(pwd, dir)
 	}
+	for _, file := range files {
+		if dir != filepath.Dir(file) {
+			return nil, fmt.Errorf("file %q is not in directory %q", file, dir)
+		}
+	}
 	fset := token.NewFileSet()
 	packages, err := parser.ParseDir(fset, dir, filter(files), parser.ParseComments)
 	if err != nil {
